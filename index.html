@@ -1583,34 +1583,6 @@ async function analyzeWithAI(){
   status.innerHTML = '⏳ Sto stimando le quantità e i valori nutrizionali...';
   preview.style.display = 'none';
 
-  const systemPrompt = `Sei un nutrizionista esperto. L'utente descrive cosa ha mangiato senza quantità precise. 
-Devi stimare le quantità realistiche in base alle descrizioni (es. "un cucchiaio" = 10-15g, "una fetta" dipende dall'alimento, "un piatto" = porzione standard italiana).
-Rispondi SOLO con un JSON valido, nessun testo prima o dopo, con questa struttura:
-{
-  "items": [
-    {
-      "name": "nome alimento",
-      "quantity_desc": "stima quantità in grammi o ml",
-      "g": 100,
-      "kcal": 0,
-      "prot": 0,
-      "carb": 0,
-      "fat": 0,
-      "vitC": 0,
-      "vitD": 0,
-      "vitB12": 0,
-      "ferro": 0,
-      "calcio": 0,
-      "magnesio": 0,
-      "zinco": 0,
-      "potassio": 0
-    }
-  ],
-  "totals": { "kcal": 0, "prot": 0, "carb": 0, "fat": 0 },
-  "note": "breve commento nutrizionale per un ragazzo di 62kg in crescita"
-}
-Tutti i valori nutrizionali sono per la quantità stimata (non per 100g). Sii preciso e realistico.`;
-
   try {
     // Call serverless function (no API key exposed in frontend)
     const response = await fetch('/api/analyze', {
@@ -1621,8 +1593,6 @@ Tutti i valori nutrizionali sono per la quantità stimata (non per 100g). Sii pr
     if(!response.ok) throw new Error('Errore server: ' + response.status);
     const parsed = await response.json();
     if(parsed.error) throw new Error(parsed.error);
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
 
     // Show preview
     const items = parsed.items || [];
@@ -1651,8 +1621,9 @@ Tutti i valori nutrizionali sono per la quantità stimata (non per 100g). Sii pr
         <div style="font-family:'JetBrains Mono',monospace;color:var(--accent)">${totals.kcal} kcal · P:${totals.prot}g · C:${totals.carb}g · G:${totals.fat}g</div>
       </div>
       ${note ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(200,169,110,.08);border-radius:6px;font-size:12px;color:var(--text2)">💡 ${note}</div>` : ''}
-      <button class="btn-primary" onclick="confirmAIMeal(${JSON.stringify(JSON.stringify({items, totals, mealType})).slice(1,-1).replace(/'/g,"\\'")})" style="width:100%;margin-top:12px">✓ Aggiungi al diario</button>
+      <button class="btn-primary" onclick="confirmAIMeal()" style="width:100%;margin-top:12px">✓ Aggiungi al diario</button>
       <button class="btn-ghost" onclick="document.getElementById('ai-meal-preview').style.display='none'" style="width:100%;margin-top:6px;font-size:12px">Annulla</button>`;
+    window._pendingAIMeal = { items, totals, mealType };
 
     status.innerHTML = `✅ Trovati ${items.length} alimenti`;
     status.style.color = 'var(--green)';
@@ -1666,8 +1637,11 @@ Tutti i valori nutrizionali sono per la quantità stimata (non per 100g). Sii pr
   btn.textContent = 'Analizza e aggiungi';
 }
 
-function confirmAIMeal(jsonStr){
-  const { items, totals, mealType } = JSON.parse(jsonStr);
+function confirmAIMeal(){
+  const pending = window._pendingAIMeal;
+  if(!pending){ alert('Nessun pasto da confermare.'); return; }
+  const { items, totals, mealType } = pending;
+  window._pendingAIMeal = null;
   const mType = mealType || document.getElementById('ai-meal-type').value;
   // Add a single combined meal entry
   const name = items.map(i => i.name).join(', ');
